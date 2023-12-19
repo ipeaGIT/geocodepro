@@ -10,6 +10,10 @@ License: What license is it under?
 Encoding: UTF-8
 Imports: 
     checkmate,
+    cli,
+    data.table,
     reticulate,
+    rlang,
     sf
 RoxygenNote: 7.2.3
+Roxygen: list(markdown = TRUE)

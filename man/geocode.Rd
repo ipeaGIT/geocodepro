@@ -6,7 +6,7 @@
 \usage{
 geocode(
   locations,
-  locator = bra_locator(),
+  locator = "C://StreetMap/NewLocators/BRA/BRA.loc",
   address_fields = address_fields_const(),
   country = "BRA",
   location_type = "ROUTING_LOCATION",
@@ -15,7 +15,7 @@ geocode(
 }
 \arguments{
 \item{locations}{Um dataframe. Os endereços que devem ser geolocalizados.
-Deve conter todas as colunas especificadas em `address_fields`.}
+Deve conter todas as colunas especificadas em \code{address_fields}.}
 
 \item{locator}{Uma string. O caminho até o localizador que deve ser
 utilizado. Por padrão, utiliza o localizador incluído no ArcGIS Pro para o
@@ -24,35 +24,63 @@ Brasil.}
 \item{address_fields}{Um vetor de caracteres. A correspondência entre as
 colunas do dataframe e os campos de geolocalização utilizados pelo ArcGIS
 Pro, em que os nomes do vetor são os campos esperados pela ferramenta e os
-valores são as colunas correspondentes. A função `address_fields()` serve
-para facilitar a criação deste vetor, fazendo também algumas verificações
-em seu conteúdo. Note que itens com o valor `NULL` são ignorados, e que a
-função deve receber ao menos um valor diferente de nulo.}
+valores são as colunas correspondentes. A função \code{address_fields_const()}
+serve para facilitar a criação deste vetor, fazendo também algumas
+verificações em seu conteúdo. Note que itens com o valor \code{NULL} são
+ignorados, e que a função deve receber ao menos um valor diferente de nulo.
+Caso esteja criando o vetor manualmente, note que os nomes dos elementos
+devem ser os mesmos nomes dos parâmetros da função
+\code{address_fields_const()}.}
 
 \item{country}{Uma string. O país no qual os endereços especificados estão
 localizados. Pode aumentar a precisão da geolocalização. Por padrão,
-`"BRA"` (Brasil).}
+\code{"BRA"} (Brasil).}
 
 \item{location_type}{Uma string. Interfere na localização final de cada
-endereço geolocalizado. As opções são `"ROUTING_LOCATION"` (padrão), em que
+endereço geolocalizado. As opções são \code{"ROUTING_LOCATION"} (padrão), em que
 os endereços são posicionados ao longo da rua, e é considerado mais
-apropriado para roteamento, ou `"ADDRESS_LOCATION"`, em que endereços são
+apropriado para roteamento, ou \code{"ADDRESS_LOCATION"}, em que endereços são
 localizados em uma posição equivalente ao "terraço" do endereço (no
 centroide do polígono correspondente).}
 
 \item{output_fields}{Uma string. As colunas que serão retornadas no output.
-Possíveis opções são `"MINIMAL"` (padrão), que inclui as colunas do
+Possíveis opções são \code{"MINIMAL"} (padrão), que inclui as colunas do
 dataframe de input e outros campos que descrevem o quão boa foi a
-correspondência entre a geolocalização e o endereço, `"ALL"`, que inclui
-todas as opções disponibilizadas pelo localizador, e `"LOCATION_ONLY"`, que
+correspondência entre a geolocalização e o endereço, \code{"ALL"}, que inclui
+todas as opções disponibilizadas pelo localizador, e \code{"LOCATION_ONLY"}, que
 inclui apenas a geolocalização do endereço e as colunas do input.}
 }
 \value{
-Um objeto `sf` do tipo `POINT` com a localização dos endereços
-  especificados.
+Um objeto \code{sf} do tipo \code{POINT} com a localização dos endereços
+especificados.
 }
 \description{
 Geolocaliza um dataframe de endereços com base em diferentes atributos.
 Documentação da ferramenta:
 https://pro.arcgis.com/en/pro-app/latest/tool-reference/geocoding/geocode-addresses.htm.
+}
+\examples{
+reticulate::use_condaenv(
+  "C://Program Files/ArcGIS/Pro/bin/Python/envs/arcgispro-py3"
+)
+
+locations <- data.frame(
+  logradouro = "Avenida Venceslau Brás, 72",
+  bairro = "Botafogo",
+  cidade = "Rio de Janeiro",
+  uf = "RJ",
+  cep = "22290-140"
+)
+
+result <- geocode(
+  locations,
+  address_fields = address_fields_const(
+    Address_or_Place = "logradouro",
+    Neighborhood = "bairro",
+    City = "cidade",
+    State = "uf",
+    ZIP = "cep"
+  )
+)
+
 }

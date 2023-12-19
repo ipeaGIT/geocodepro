@@ -124,6 +124,21 @@ assert_address_fields <- function(address_fields, locations) {
   return(invisible(TRUE))
 }
 
+#' Construtor de especificação de colunas
+#'
+#' Auxilia a criar um vetor de caracteres que especifica as colunas que
+#' representam cada campo de endereço no dataframe de localizações.
+#'
+#' @param Address_or_Place,Address2,Address3,Neighborhood,City,County,State,ZIP,ZIP4,Country
+#'   Uma string. O nome da coluna que representa o respectivo campo de endereço
+#'   no dataframe de localizações. Pode ser `NULL`, no caso do campo não ser
+#'   especificado no dataframe. O valor de ao menos um dos campos não deve ser
+#'   nulo.
+#'
+#' @return Um vetor de caracteres com o nome da coluna que representa cada campo
+#'   no dataframe de localizações especificado.
+#'
+#' @export
 address_fields_const <- function(Address_or_Place = NULL,
                                  Address2 = NULL,
                                  Address3 = NULL,
