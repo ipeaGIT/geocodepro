@@ -81,7 +81,12 @@ geocode <- function(locations,
   tmpfile_input <- tempfile("geocode_input", fileext = ".csv")
   data.table::fwrite(locations, tmpfile_input)
 
-  tmpfile_output <- tempfile("geocode_output", fileext = ".shp")
+  tmpfile_output <- tempfile("geocode_output", fileext = ".gdb")
+  tmpfile_basename <- basename(tmpfile_output)
+  tmpfile_creation_result <- arcpy$CreateFileGDB_management(
+    out_folder_path = tempdir(),
+    out_name = tmpfile_basename
+  )
 
   arcpy$env$overwriteOutput <- TRUE
 
@@ -89,39 +94,20 @@ geocode <- function(locations,
     in_table = tmpfile_input,
     address_locator = normalizePath(locator),
     in_address_fields = address_fields_string,
-    out_feature_class = tmpfile_output,
+    out_feature_class = file.path(tmpfile_output, "geocode_result"),
     out_relationship_type = "STATIC",
     country = country,
     location_type = location_type,
     output_fields = output_fields
   )
 
-  geocoded_locations <- sf::st_read(tmpfile_output, quiet = TRUE)
+  geocoded_locations <- sf::st_read(
+    tmpfile_output,
+    layer = "geocode_result",
+    quiet = TRUE
+  )
 
   return(geocoded_locations)
-}
-
-assert_address_fields <- function(address_fields, locations) {
-  checkmate::assert_character(address_fields, any.missing = FALSE)
-  checkmate::assert_names(
-    names(address_fields),
-    type = "unique",
-    subset.of = c(
-      "Address_or_Place",
-      "Address2",
-      "Address3",
-      "Neighborhood",
-      "City",
-      "County",
-      "State",
-      "ZIP",
-      "ZIP4",
-      "Country"
-    )
-  )
-  checkmate::assert_names(address_fields, subset.of = names(locations))
-
-  return(invisible(TRUE))
 }
 
 #' Construtor de especificação de colunas
@@ -180,6 +166,29 @@ address_fields_const <- function(Address_or_Place = NULL,
   }
 
   return(address_fields_vec)
+}
+
+assert_address_fields <- function(address_fields, locations) {
+  checkmate::assert_character(address_fields, any.missing = FALSE)
+  checkmate::assert_names(
+    names(address_fields),
+    type = "unique",
+    subset.of = c(
+      "Address_or_Place",
+      "Address2",
+      "Address3",
+      "Neighborhood",
+      "City",
+      "County",
+      "State",
+      "ZIP",
+      "ZIP4",
+      "Country"
+    )
+  )
+  checkmate::assert_names(address_fields, subset.of = names(locations))
+
+  return(invisible(TRUE))
 }
 
 fields_to_string <- function(address_fields) {
