@@ -1,0 +1,95 @@
+---
+output: github_document
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/README-",
+  out.width = "100%"
+)
+```
+
+# geocodepro
+
+Disponibiliza funções que facilitam a utilização da ferramenta de geolocalização
+do ArcGIS Pro no R.
+
+## Instalação
+
+**geocodepro** não está no CRAN, e provavelmente nem vai estar no futuro. Pra
+instalar o pacote, use o código abaixo:
+
+```r
+# install.packages("remotes")
+remotes::install_github("ipeaGIT/geocodepro")
+```
+
+O pacote também precisa de uma licença válida e ativa do ArcGIS Pro na máquina
+em que o código está sendo rodado.
+
+## Utilização
+
+O **geocodepro** funciona através da interface entre o ArcGIS Pro e a linguage
+de programação Python. Para isso, ele utiliza a biblioteca `arcpy` através do
+pacote `{reticulate}`. É necessário que nós utilizemos a mesma versão e as
+mesmas bibliotecas de Python que o ArcGIS Pro usa, portanto para isso nós
+precisamos apontar para o ambiente de programação do ArcGIS com a função
+`use_condaenv()` do `{reticulate}` (isso pode ser feito tanto antes quanto
+depois de carregar o **geocodepro**, mas deve ser feito antes de utilizar suas
+funções).
+
+```{r}
+reticulate::use_condaenv(
+  "C://Program Files/ArcGIS/Pro/bin/Python/envs/arcgispro-py3"
+)
+```
+
+Antes de utilizarmos o pacote, precisamos primeiro aponta o ambiente de trabalho
+adequado pra isso A principal função do pacote é a `geocode()`. Ela tem como
+principais *inputs* uma tabela de endereços e um arquivo que aponta para o
+localizador utilizado pela ferramenta para fazer a correspondência com os
+endereços. É necessário também indicar quais colunas da tabela correspondem a
+cada um dos campos de geolocalização utilizados pelo ArcGIS Pro, o que fazemos
+com a função `address_fields_const()`. No exemplo abaixo, geolocalizamos os 1000
+primeiros registros do CNES 2022.
+
+```{r, message = FALSE}
+library(geocodepro)
+
+cnes <- readxl::read_xlsx(
+  "../../data-raw/cnes/2022/BANCO_ESTAB_IPEA_COMP_08_2022_DT_25_10_2023.xlsx",
+  skip = 15,
+  n_max = 1000
+) |>
+  dplyr::mutate(LOGRADOURO = paste(LOGRADOURO, NUMERO)) |>
+  dplyr::select(UF, MUNICÍPIO, LOGRADOURO, BAIRRO, CEP)
+
+ends_geolocalizados <- geocode(
+  cnes,
+  locator = "../../data-raw/locators/BRA/BRA.loc",
+  address_fields = address_fields_const(
+    Address_or_Place = "LOGRADOURO",
+    Neighborhood = "BAIRRO",
+    City = "MUNICÍPIO",
+    State = "UF",
+    ZIP = "CEP"
+  )
+)
+ends_geolocalizados
+```
+
+```{r, message = FALSE}
+library(tmap)
+
+tiles <- maptiles::get_tiles(
+  ends_geolocalizados,
+  provider = "OpenStreetMap.France"
+)
+
+tm_shape(tiles) +
+  tm_rgb() +
+  tm_shape(ends_geolocalizados) +
+  tm_dots(col = "black", size = 0.5)
+```
