@@ -88,8 +88,6 @@ geocode <- function(locations,
     out_name = tmpfile_basename
   )
 
-  arcpy$env$overwriteOutput <- TRUE
-
   geocode_fn_output <- arcpy$geocoding$GeocodeAddresses(
     in_table = tmpfile_input,
     address_locator = normalizePath(locator),
@@ -106,6 +104,12 @@ geocode <- function(locations,
     layer = "geocode_result",
     quiet = TRUE
   )
+
+  hexs <- h3jsr::point_to_cell(geocoded_locations, res = 7:9)
+  names(hexs) <- gsub("resolution", "res", names(hexs))
+
+  geocoded_locations <- cbind(geocoded_locations, hexs)
+  geocoded_locations <- dplyr::rename(geocoded_locations, geom = Shape)
 
   return(geocoded_locations)
 }
