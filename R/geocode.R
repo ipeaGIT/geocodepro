@@ -105,6 +105,25 @@ geocode <- function(locations,
     quiet = TRUE
   )
 
+  # a coluna de cep, se presente e se não contiver caracteres como '-', é
+  # convertida para int ao usar o st_read(). alguns ceps podem começar com 0, o
+  # que acaba fazendo com que ceps convertidos tenham um caractere a menos. por
+  # isso nós precisamos converter essa coluna para char e fazer um padding com
+  # 0s à esquerda para 8 dígitos
+
+  if ("ZIP" %in% names(address_fields)) {
+    zip_values <- geocoded_locations[[address_fields["ZIP"]]]
+
+    if (is.numeric(zip_values)) {
+      geocoded_locations[[address_fields["ZIP"]]] <- formatC(
+        zip_values,
+        width = 8,
+        flag = "0",
+        format = "d"
+      )
+    }
+  }
+
   hexs <- h3jsr::point_to_cell(geocoded_locations, res = 7:9)
   names(hexs) <- gsub("resolution", "res", names(hexs))
 
