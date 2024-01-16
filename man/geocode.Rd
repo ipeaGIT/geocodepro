@@ -8,9 +8,9 @@ geocode(
   locations,
   locator = "C://StreetMap/NewLocators/BRA/BRA.loc",
   address_fields = address_fields_const(),
-  country = "BRA",
   location_type = "ROUTING_LOCATION",
-  output_fields = "MINIMAL"
+  output_fields = "MINIMAL",
+  cache = TRUE
 )
 }
 \arguments{
@@ -32,10 +32,6 @@ Caso esteja criando o vetor manualmente, note que os nomes dos elementos
 devem ser os mesmos nomes dos parâmetros da função
 \code{address_fields_const()}.}
 
-\item{country}{Uma string. O país no qual os endereços especificados estão
-localizados. Pode aumentar a precisão da geolocalização. Por padrão,
-\code{"BRA"} (Brasil).}
-
 \item{location_type}{Uma string. Interfere na localização final de cada
 endereço geolocalizado. As opções são \code{"ROUTING_LOCATION"} (padrão), em que
 os endereços são posicionados ao longo da rua, e é considerado mais
@@ -49,6 +45,16 @@ dataframe de input e outros campos que descrevem o quão boa foi a
 correspondência entre a geolocalização e o endereço, \code{"ALL"}, que inclui
 todas as opções disponibilizadas pelo localizador, e \code{"LOCATION_ONLY"}, que
 inclui apenas a geolocalização do endereço e as colunas do input.}
+
+\item{cache}{Um logical (por padrão, \code{TRUE}) ou uma string. Se \code{TRUE}, é
+utilizado um cache "geral" tanto para buscar localizações que já tenham
+sido geolocalizadas antes quanto para adicionar quaisquer pontos que tenham
+sido geolocalizados na operação corrente. Se \code{FALSE}, nenhum cache é usado.
+Caso seja uma string, seu valor é utilizado para identificar um cache
+específico. Por exemplo, pode ser útil usar um cache apenas para endereços
+da RAIS, caso em que temos que passar \code{"rais"}. Caso desejemos invalidar
+este cache e começar um novo cache da RAIS do zero, podemos passar
+\code{"rais_v2"}.}
 }
 \value{
 Um objeto \code{sf} do tipo \code{POINT} com a localização dos endereços

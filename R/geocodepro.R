@@ -2,6 +2,8 @@
 #' @name geocodepro
 #' @aliases geocodepro-package
 #'
+#' @importFrom data.table :=
+#'
 #' @keywords internal
 "_PACKAGE"
 

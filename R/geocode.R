@@ -19,9 +19,6 @@
 #'   Caso esteja criando o vetor manualmente, note que os nomes dos elementos
 #'   devem ser os mesmos nomes dos parâmetros da função
 #'   `address_fields_const()`.
-#' @param country Uma string. O país no qual os endereços especificados estão
-#'   localizados. Pode aumentar a precisão da geolocalização. Por padrão,
-#'   `"BRA"` (Brasil).
 #' @param location_type Uma string. Interfere na localização final de cada
 #'   endereço geolocalizado. As opções são `"ROUTING_LOCATION"` (padrão), em que
 #'   os endereços são posicionados ao longo da rua, e é considerado mais
@@ -34,6 +31,15 @@
 #'   correspondência entre a geolocalização e o endereço, `"ALL"`, que inclui
 #'   todas as opções disponibilizadas pelo localizador, e `"LOCATION_ONLY"`, que
 #'   inclui apenas a geolocalização do endereço e as colunas do input.
+#' @param cache Um logical (por padrão, `TRUE`) ou uma string. Se `TRUE`, é
+#'   utilizado um cache "geral" tanto para buscar localizações que já tenham
+#'   sido geolocalizadas antes quanto para adicionar quaisquer pontos que tenham
+#'   sido geolocalizados na operação corrente. Se `FALSE`, nenhum cache é usado.
+#'   Caso seja uma string, seu valor é utilizado para identificar um cache
+#'   específico. Por exemplo, pode ser útil usar um cache apenas para endereços
+#'   da RAIS, caso em que temos que passar `"rais"`. Caso desejemos invalidar
+#'   este cache e começar um novo cache da RAIS do zero, podemos passar
+#'   `"rais_v2"`.
 #'
 #' @return Um objeto `sf` do tipo `POINT` com a localização dos endereços
 #'   especificados.
@@ -66,18 +72,213 @@
 geocode <- function(locations,
                     locator = "C://StreetMap/NewLocators/BRA/BRA.loc",
                     address_fields = address_fields_const(),
-                    country = "BRA",
                     location_type = "ROUTING_LOCATION",
-                    output_fields = "MINIMAL") {
+                    output_fields = "MINIMAL",
+                    cache = TRUE) {
   checkmate::assert_data_frame(locations)
   checkmate::assert_file_exists(locator, extension = ".loc")
-  checkmate::assert_string(country)
   checkmate::assert_string(location_type)
   checkmate::assert_string(output_fields)
   assert_address_fields(address_fields, locations)
+  cache <- assert_and_assign_cache(cache)
 
-  address_fields_string <- fields_to_string(address_fields)
+  geocoded_data <- geocode_addresses(
+    locations,
+    locator = locator,
+    address_fields = address_fields,
+    location_type = location_type,
+    output_fields = output_fields,
+    cache = cache
+  )
 
+  return(geocoded_data)
+}
+
+geocode_addresses <- function(locations,
+                              locator,
+                              address_fields,
+                              location_type,
+                              output_fields,
+                              cache) {
+  if (isFALSE(cache)) {
+    output_file <- do_geocode(
+      locations,
+      locator = locator,
+      address_fields = address_fields,
+      location_type = location_type,
+      output_fields = output_fields
+    )
+
+    geocoded_data <- read_geocoded_data_from_path(output_file)
+
+    return(geocoded_data)
+  }
+
+  # para usar o cache, precisamos:
+  #  1) checar se o cache existe.
+  #  2) caso exista, fazemos um match entre os endereços a serem localizados e o
+  #     cache.
+  #  3) chamamos a função de geolocalização apenas para os endereços não
+  #     presentes no cache (se o cache não existia previamente, enviamos todos
+  #     os endereços)
+  #  4) ao final, adicionamos os endereços recém geolocalizados ao cache
+
+  cache_path <- file.path("../../data-raw/geocode_cache", paste0(cache, ".rds"))
+
+  if (file.exists(cache_path)) {
+    geocoded_data <- geocode_with_previous_cache(
+      locations,
+      locator = locator,
+      address_fields = address_fields,
+      location_type = location_type,
+      output_fields = output_fields,
+      cache_path = cache_path
+    )
+  } else {
+    geocoded_data <- geocode_without_previous_cache(
+      locations,
+      locator = locator,
+      address_fields = address_fields,
+      location_type = location_type,
+      output_fields = output_fields,
+      cache_path = cache_path
+    )
+  }
+
+  return(geocoded_data)
+}
+
+geocode_with_previous_cache <- function(locations,
+                                        locator,
+                                        address_fields,
+                                        location_type,
+                                        output_fields,
+                                        cache_path) {
+  cache_data <- readRDS(cache_path)
+
+  lookup_vector <- names(address_fields)
+  names(lookup_vector) <- address_fields
+
+  lookup_expression <- build_lookup_expression()
+  locations_with_data <- data.table::as.data.table(locations)
+  locations_with_data[cache_data, on = lookup_vector, eval(lookup_expression)]
+
+  cached_data <- locations_with_data[!is.na(Score)]
+  cached_data <- format_cached_addresses(
+    cached_data,
+    names(locations)
+  )
+
+  uncached_locations <- locations_with_data[is.na(Score)]
+  # TODO: implement this
+  new_geocoded_data <- geocode_and_append_to_cache(
+    uncached_locations,
+    cache,
+    locator = locator,
+    address_fields = address_fields,
+    location_type = location_type,
+    output_fields = output_fields
+  )
+
+
+
+  uncached_locations[
+    ,
+    setdiff(names(locations_with_data), names(locations)) := NULL
+  ]
+
+  if (nrow(non_cached_locations) == 0) {
+    # TODO: implement this
+    new_geocoded_data <- empty_geocoded(address_fields)
+  } else {
+    new_geocoded_data_path <- do_geocode(
+      uncached_locations,
+      locator = locator,
+      address_fields = address_fields,
+      location_type = location_type,
+      output_fields = output_fields
+    )
+
+    new_geocoded_data <- read_geocoded_data_from_path(new_geocoded_data_path)
+
+    # TODO: implement this
+    append_to_cache(
+      geocoded_not_cached,
+      cache,
+      address_fields = address_fields,
+      location_type = location_type
+    )
+  }
+
+  geocoded_data <- rbind(
+    cached_data,
+    geocoded_not_cached
+  )
+}
+
+build_lookup_expression <- function() {
+  geocode_cols <- c(
+    "Status",
+    "Score",
+    "Match_type",
+    "Match_addr",
+    "Addr_type",
+    "Lon",
+    "Lat"
+  )
+
+  expr_text <- paste0(
+    "`:=`(",
+    paste0(geocode_cols, " = i.", geocode_cols, collapse = ", "),
+    ")"
+  )
+  expr <- parse(text = expr_text)
+
+  return(expr)
+}
+
+format_cached_addresses <- function(cached_data, locations_names) {
+  data.table::setcolorder(
+    cached_data,
+    c(setdiff(names(cached_data), locations_names), locations_names)
+  )
+  cached_data <- sf::st_as_sf(cached_data, coords = c("Lon", "Lat"))
+  cached_data <- dplyr::rename(cached_data, geom = geometry)
+
+  return(cached_data)
+}
+
+geocode_without_previous_cache <- function(locations,
+                                           locator,
+                                           address_fields,
+                                           location_type,
+                                           output_fields,
+                                           cache_path) {
+  geocoded_path <- do_geocode(
+    locations,
+    locator = locator,
+    address_fields = address_fields,
+    location_type = location_type,
+    output_fields = output_fields
+  )
+
+  geocoded_data <- read_geocoded_data_from_path(geocoded_path)
+
+  create_geocode_cache(
+    geocoded_data,
+    address_fields = address_fields,
+    location_type = location_type,
+    cache_path = cache_path
+  )
+
+  return(geocoded_data)
+}
+
+do_geocode <- function(locations,
+                       locator,
+                       address_fields,
+                       location_type,
+                       output_fields) {
   tmpfile_input <- tempfile("geocode_input", fileext = ".csv")
   data.table::fwrite(locations, tmpfile_input)
 
@@ -88,130 +289,26 @@ geocode <- function(locations,
     out_name = tmpfile_basename
   )
 
+  address_fields_string <- fields_to_string(address_fields)
+
+  # a função retorna uma string listando o enderço de output, mas com uma
+  # formatação extra e superficial. a variável abaixo não é usada pra nada, só
+  # pra "silenciar" o output da função. estamos realmente interessados no
+  # "side-effect" da função abaixo, que é geolocalizar os endereços e escrever
+  # o output na camada geocode_result do geodatabase de output
+
   geocode_fn_output <- arcpy$geocoding$GeocodeAddresses(
     in_table = tmpfile_input,
     address_locator = normalizePath(locator),
     in_address_fields = address_fields_string,
     out_feature_class = file.path(tmpfile_output, "geocode_result"),
     out_relationship_type = "STATIC",
-    country = country,
+    country = "BRA",
     location_type = location_type,
     output_fields = output_fields
   )
 
-  geocoded_locations <- sf::st_read(
-    tmpfile_output,
-    layer = "geocode_result",
-    quiet = TRUE
-  )
-
-  # a coluna de cep, se presente e se não contiver caracteres como '-', é
-  # convertida para int ao usar o st_read(). alguns ceps podem começar com 0, o
-  # que acaba fazendo com que ceps convertidos tenham um caractere a menos. por
-  # isso nós precisamos converter essa coluna para char e fazer um padding com
-  # 0s à esquerda para 8 dígitos
-
-  if ("ZIP" %in% names(address_fields)) {
-    zip_values <- geocoded_locations[[address_fields["ZIP"]]]
-
-    if (is.numeric(zip_values)) {
-      geocoded_locations[[address_fields["ZIP"]]] <- formatC(
-        zip_values,
-        width = 8,
-        flag = "0",
-        format = "d"
-      )
-    }
-  }
-
-  hexs <- h3jsr::point_to_cell(geocoded_locations, res = 7:9)
-  names(hexs) <- gsub("resolution", "res", names(hexs))
-
-  geocoded_locations <- cbind(geocoded_locations, hexs)
-  geocoded_locations <- dplyr::rename(geocoded_locations, geom = Shape)
-
-  return(geocoded_locations)
-}
-
-#' Construtor de especificação de colunas
-#'
-#' Auxilia a criar um vetor de caracteres que especifica as colunas que
-#' representam cada campo de endereço no dataframe de localizações.
-#'
-#' @param Address_or_Place,Address2,Address3,Neighborhood,City,County,State,ZIP,ZIP4,Country
-#'   Uma string. O nome da coluna que representa o respectivo campo de endereço
-#'   no dataframe de localizações. Pode ser `NULL`, no caso do campo não ser
-#'   especificado no dataframe. O valor de ao menos um dos campos não deve ser
-#'   nulo.
-#'
-#' @return Um vetor de caracteres com o nome da coluna que representa cada campo
-#'   no dataframe de localizações especificado.
-#'
-#' @export
-address_fields_const <- function(Address_or_Place = NULL,
-                                 Address2 = NULL,
-                                 Address3 = NULL,
-                                 Neighborhood = NULL,
-                                 City = NULL,
-                                 County = NULL,
-                                 State = NULL,
-                                 ZIP = NULL,
-                                 ZIP4 = NULL,
-                                 Country = NULL) {
-  col <- checkmate::makeAssertCollection()
-  checkmate::assert_string(Address_or_Place, null.ok = TRUE, add = col)
-  checkmate::assert_string(Address2, null.ok = TRUE, add = col)
-  checkmate::assert_string(Address3, null.ok = TRUE, add = col)
-  checkmate::assert_string(Neighborhood, null.ok = TRUE, add = col)
-  checkmate::assert_string(City, null.ok = TRUE, add = col)
-  checkmate::assert_string(County, null.ok = TRUE, add = col)
-  checkmate::assert_string(State, null.ok = TRUE, add = col)
-  checkmate::assert_string(ZIP, null.ok = TRUE, add = col)
-  checkmate::assert_string(ZIP4, null.ok = TRUE, add = col)
-  checkmate::assert_string(Country, null.ok = TRUE, add = col)
-  checkmate::reportAssertions(col)
-
-  address_fields_vec <- c(
-    Address_or_Place = Address_or_Place,
-    Address2 = Address2,
-    Address3 = Address3,
-    Neighborhood = Neighborhood,
-    City = City,
-    County = County,
-    State = State,
-    ZIP = ZIP,
-    ZIP4 = ZIP4,
-    Country = Country
-  )
-
-  if (is.null(address_fields_vec)) {
-    error_address_fields_must_not_be_null()
-  }
-
-  return(address_fields_vec)
-}
-
-assert_address_fields <- function(address_fields, locations) {
-  checkmate::assert_character(address_fields, any.missing = FALSE)
-  checkmate::assert_names(
-    names(address_fields),
-    type = "unique",
-    subset.of = c(
-      "Address_or_Place",
-      "Address2",
-      "Address3",
-      "Neighborhood",
-      "City",
-      "County",
-      "State",
-      "ZIP",
-      "ZIP4",
-      "Country"
-    )
-  )
-  checkmate::assert_names(address_fields, subset.of = names(locations))
-
-  return(invisible(TRUE))
+  return(tmpfile_output)
 }
 
 fields_to_string <- function(address_fields) {
@@ -253,14 +350,113 @@ fields_to_string <- function(address_fields) {
   return(fields_string)
 }
 
-
-error_address_fields_must_not_be_null <- function() {
-  cli::cli_abort(
-    paste0(
-      "At least one of {.fn address_fields_const} ",
-      "arguments must not be {.code NULL}."
-    ),
-    class = "address_fields_must_not_be_null",
-    call = rlang::caller_env()
+read_geocoded_data_from_path <- function(output_file) {
+  geocoded_data <- sf::st_read(
+    output_file,
+    layer = "geocode_result",
+    quiet = TRUE
   )
+
+  # a coluna de cep, se presente e se não contiver caracteres como '-', é
+  # convertida para int ao usar o st_read(). alguns ceps podem começar com 0, o
+  # que acaba fazendo com que ceps convertidos tenham um caractere a menos. por
+  # isso nós precisamos converter essa coluna para char e fazer um padding com
+  # 0s à esquerda para 8 dígitos
+
+  if ("ZIP" %in% names(address_fields)) {
+    zip_values <- geocoded_data[[address_fields["ZIP"]]]
+
+    if (is.numeric(zip_values)) {
+      geocoded_data[[address_fields["ZIP"]]] <- formatC(
+        zip_values,
+        width = 8,
+        flag = "0",
+        format = "d"
+      )
+    }
+  }
+
+  geocoded_data <- dplyr::rename(geocoded_data, geom = Shape)
+
+  return(geocoded_data)
+}
+
+create_geocode_cache <- function(geocoded_data,
+                                 address_fields,
+                                 location_type,
+                                 cache_path) {
+  data_in_cache_structure <- to_cache_structure(
+    geocoded_data,
+    address_fields = address_fields,
+    location_type = location_type,
+    lookup_only = FALSE
+  )
+  data_in_cache_structure <- unique(data_in_cache_structure)
+
+  saveRDS(data_in_cache_structure, cache_path)
+
+  return(invisible(cache_path))
+}
+
+to_cache_structure <- function(geocoded_data,
+                               address_fields,
+                               location_type,
+                               lookup_only) {
+  arcpy_params <- "location_type"
+  all_address_fields <- c(
+    "Address_or_Place",
+    "Address2",
+    "Address3",
+    "Neighborhood",
+    "City",
+    "County",
+    "State",
+    "ZIP",
+    "ZIP4",
+    "Country"
+  )
+  geocode_cols <- c(
+    "Status",
+    "Score",
+    "Match_type",
+    "Match_addr",
+    "Addr_type",
+    "Lon",
+    "Lat"
+  )
+
+  structure_fields <- if (lookup_only) {
+    c(arcpy_params, all_address_fields)
+  } else {
+    c(arcpy_params, all_address_fields, geocode_cols)
+  }
+
+  empty_list <- lapply(1:length(structure_fields), function(i) character(0))
+  empty_table <- data.table::setDT(empty_list)
+  names(empty_table) <- structure_fields
+
+  if (!lookup_only) empty_table[, c("Score", "Lon", "Lat") := numeric(0)]
+
+  cache_data <- data.table::as.data.table(geocoded_data)
+  cache_data <- point_to_coords(geocoded_data)
+  cache_data <- data.table::setnames(
+    cache_data,
+    old = address_fields,
+    new = names(address_fields)
+  )
+
+  cache_data <- rbind(empty_table, cache_data, fill = TRUE)
+  cache_data[, location_type := get("location_type", env = parent.frame())]
+
+  return(cache_data[])
+}
+
+point_to_coords <- function(geocoded_data) {
+  coords <- data.table::as.data.table(sf::st_coordinates(geocoded_data))
+  names(coords) <- c("Lon", "Lat")
+
+  geocoded_data <- sf::st_drop_geometry(geocoded_data)
+  geocoded_data <- data.table::setDT(cbind(geocoded_data, coords))
+
+  return(geocoded_data)
 }
