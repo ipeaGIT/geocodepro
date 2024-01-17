@@ -109,7 +109,7 @@ geocode_addresses <- function(locations,
       output_fields = output_fields
     )
 
-    geocoded_data <- read_geocoded_data_from_path(output_file)
+    geocoded_data <- read_geocoded_data_from_path(output_file, address_fields)
 
     return(geocoded_data)
   }
@@ -164,56 +164,25 @@ geocode_with_previous_cache <- function(locations,
   locations_with_data[cache_data, on = lookup_vector, eval(lookup_expression)]
 
   cached_data <- locations_with_data[!is.na(Score)]
-  cached_data <- format_cached_addresses(
-    cached_data,
-    names(locations)
-  )
+  cached_data <- format_cached_addresses(cached_data, names(locations))
 
   uncached_locations <- locations_with_data[is.na(Score)]
-  # TODO: implement this
   new_geocoded_data <- geocode_and_append_to_cache(
     uncached_locations,
-    cache,
+    cache_data = cache_data,
+    cache_path = cache_path,
     locator = locator,
     address_fields = address_fields,
     location_type = location_type,
     output_fields = output_fields
   )
 
-
-
-  uncached_locations[
-    ,
-    setdiff(names(locations_with_data), names(locations)) := NULL
-  ]
-
-  if (nrow(non_cached_locations) == 0) {
-    # TODO: implement this
-    new_geocoded_data <- empty_geocoded(address_fields)
-  } else {
-    new_geocoded_data_path <- do_geocode(
-      uncached_locations,
-      locator = locator,
-      address_fields = address_fields,
-      location_type = location_type,
-      output_fields = output_fields
-    )
-
-    new_geocoded_data <- read_geocoded_data_from_path(new_geocoded_data_path)
-
-    # TODO: implement this
-    append_to_cache(
-      geocoded_not_cached,
-      cache,
-      address_fields = address_fields,
-      location_type = location_type
-    )
-  }
-
   geocoded_data <- rbind(
     cached_data,
-    geocoded_not_cached
+    new_geocoded_data
   )
+
+  return(geocoded_data)
 }
 
 build_lookup_expression <- function() {
@@ -242,10 +211,103 @@ format_cached_addresses <- function(cached_data, locations_names) {
     cached_data,
     c(setdiff(names(cached_data), locations_names), locations_names)
   )
-  cached_data <- sf::st_as_sf(cached_data, coords = c("Lon", "Lat"))
+  cached_data <- sf::st_as_sf(cached_data, coords = c("Lon", "Lat"), crs = 4326)
   cached_data <- dplyr::rename(cached_data, geom = geometry)
 
   return(cached_data)
+}
+
+geocode_and_append_to_cache <- function(uncached_locations,
+                                        cache_data,
+                                        cache_path,
+                                        locator,
+                                        address_fields,
+                                        location_type,
+                                        output_fields) {
+  if (nrow(uncached_locations) == 0) {
+    return(empty_geocoded_data(address_fields))
+  }
+
+  uncached_locations[
+    ,
+    setdiff(names(uncached_locations), address_fields) := NULL
+  ]
+
+  new_geocoded_data_path <- do_geocode(
+    uncached_locations,
+    locator = locator,
+    address_fields = address_fields,
+    location_type = location_type,
+    output_fields = output_fields
+  )
+
+  new_geocoded_data <- read_geocoded_data_from_path(
+    new_geocoded_data_path,
+    address_fields
+  )
+
+  append_to_cache(
+    new_geocoded_data,
+    cache_data = cache_data,
+    cache_path = cache_path,
+    address_fields = address_fields,
+    location_type = location_type
+  )
+
+  return(new_geocoded_data)
+}
+
+empty_geocoded_data <- function(address_fields) {
+  relevant_cols <- c(
+    address_fields,
+    "Status",
+    "Score",
+    "Match_type",
+    "Match_addr",
+    "Addr_type",
+    "Lon",
+    "Lat"
+  )
+  empty_list <- lapply(1:length(relevant_cols), function(i) character(0))
+  empty_table <- data.table::setDT(empty_list)
+  names(empty_table) <- relevant_cols
+  empty_table[, c("Score", "Lon", "Lat") := numeric(0)]
+
+  # st_as_sf() raises warnings when trying to calculate the bounding box of this
+  # object, since its empty.
+  # warnings in the format:
+  #   - In min(cc[[1]], na.rm = TRUE) : no non-missing arguments to min;
+  #     returning Inf
+
+  suppressWarnings(
+    empty_table <- sf::st_as_sf(
+      empty_table,
+      coords = c("Lon", "Lat"),
+      crs = 4326,
+      sf_column_name = "geom"
+    )
+  )
+
+  return(empty_table)
+}
+
+append_to_cache <- function(new_geocoded_data,
+                            cache_data,
+                            cache_path,
+                            address_fields,
+                            location_type) {
+  new_data_in_cache_structure <- to_cache_structure(
+    new_geocoded_data,
+    address_fields = address_fields,
+    location_type = location_type,
+    lookup_only = FALSE
+  )
+  new_data_in_cache_structure <- unique(new_data_in_cache_structure)
+
+  cache_data <- rbind(cache_data, new_data_in_cache_structure)
+  saveRDS(cache_data, cache_path)
+
+  return(invisible(cache_path))
 }
 
 geocode_without_previous_cache <- function(locations,
@@ -262,7 +324,7 @@ geocode_without_previous_cache <- function(locations,
     output_fields = output_fields
   )
 
-  geocoded_data <- read_geocoded_data_from_path(geocoded_path)
+  geocoded_data <- read_geocoded_data_from_path(geocoded_path, address_fields)
 
   create_geocode_cache(
     geocoded_data,
@@ -350,7 +412,7 @@ fields_to_string <- function(address_fields) {
   return(fields_string)
 }
 
-read_geocoded_data_from_path <- function(output_file) {
+read_geocoded_data_from_path <- function(output_file, address_fields) {
   geocoded_data <- sf::st_read(
     output_file,
     layer = "geocode_result",
@@ -445,8 +507,9 @@ to_cache_structure <- function(geocoded_data,
     new = names(address_fields)
   )
 
+  env <- environment()
   cache_data <- rbind(empty_table, cache_data, fill = TRUE)
-  cache_data[, location_type := get("location_type", env = parent.frame())]
+  cache_data[, location_type := get("location_type", envir = env)]
 
   return(cache_data[])
 }
