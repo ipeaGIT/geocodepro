@@ -346,10 +346,7 @@ do_geocode <- function(locations,
 
   tmpfile_output <- tempfile("geocode_output", fileext = ".gdb")
   tmpfile_basename <- basename(tmpfile_output)
-  tmpfile_creation_result <- arcpy$CreateFileGDB_management(
-    out_folder_path = tempdir(),
-    out_name = tmpfile_basename
-  )
+  create_gdb_file(tmpfile_basename)
 
   address_fields_string <- fields_to_string(address_fields)
 
@@ -371,6 +368,20 @@ do_geocode <- function(locations,
   )
 
   return(tmpfile_output)
+}
+
+create_gdb_file <- function(tmpfile_basename) {
+  # por algum motivo a chamada da função do arcpy muda o locale da sessão, o que
+  # impacta em como as strings e os inputs são processados. essa função,
+  # portanto, transforma o locale de volta pro default do sistema ao final de
+  # sua chamada
+  on.exit(Sys.setlocale(locale = ""), add = TRUE)
+  tmpfile_creation_result <- arcpy$CreateFileGDB_management(
+    out_folder_path = tempdir(),
+    out_name = tmpfile_basename
+  )
+
+  return(invisible(TRUE))
 }
 
 fields_to_string <- function(address_fields) {
