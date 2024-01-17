@@ -13,7 +13,6 @@ Imports:
     checkmate,
     cli,
     data.table,
-    h3jsr,
     reticulate,
     rlang,
     sf
