@@ -211,7 +211,34 @@ format_cached_addresses <- function(cached_data, locations_names) {
     cached_data,
     c(setdiff(names(cached_data), locations_names), locations_names)
   )
-  cached_data <- sf::st_as_sf(cached_data, coords = c("Lon", "Lat"), crs = 4326)
+
+  # the latlon columns may be empty if the address is unmatched. in such cases,
+  # st_as_sf() would fail, so we use sfheaders::sf_points() to deal with NAs
+
+  if (any(is.na(cached_data$Lon))) {
+    non_na_coords_data <- sf::st_as_sf(
+      cached_data[!is.na(Lon)],
+      coords = c("Lon", "Lat"),
+      crs = 4326
+    )
+
+    na_coords_data <- sfheaders::sf_point(
+      cached_data[is.na(Lon)],
+      x = "Lon",
+      y = "Lat",
+      keep = TRUE
+    )
+    na_coords_data <- sf::st_set_crs(na_coords_data, 4326)
+
+    cached_data <- rbind(non_na_coords_data, na_coords_data)
+  } else {
+    cached_data <- sf::st_as_sf(
+      cached_data,
+      coords = c("Lon", "Lat"),
+      crs = 4326
+    )
+  }
+
   cached_data <- dplyr::rename(cached_data, geom = geometry)
 
   return(cached_data)
