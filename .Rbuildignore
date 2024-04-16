@@ -3,3 +3,6 @@
 ^LICENSE\.md$
 ^README\.Rmd$
 ^README\.html$
+^geocode$
+^geocode\.db$
+^locations\.csv$

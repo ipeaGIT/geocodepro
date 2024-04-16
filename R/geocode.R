@@ -40,6 +40,8 @@
 #'   da RAIS, caso em que temos que passar `"rais"`. Caso desejemos invalidar
 #'   este cache e começar um novo cache da RAIS do zero, podemos passar
 #'   `"rais_v2"`.
+#' @param verbose Um logical. Se mensagens informativas devem ser printadas
+#'   (padrão) ou não.
 #'
 #' @return Um objeto `sf` do tipo `POINT` com a localização dos endereços
 #'   especificados.
@@ -65,7 +67,8 @@
 #'     City = "cidade",
 #'     State = "uf",
 #'     ZIP = "cep"
-#'   )
+#'   ),
+#'   cache = FALSE
 #' )
 #'
 #' @export
@@ -74,11 +77,13 @@ geocode <- function(locations,
                     address_fields = address_fields_const(),
                     location_type = "ROUTING_LOCATION",
                     output_fields = "MINIMAL",
-                    cache = TRUE) {
+                    cache = TRUE,
+                    verbose = TRUE) {
   checkmate::assert_data_frame(locations)
   checkmate::assert_file_exists(locator, extension = ".loc")
   checkmate::assert_string(location_type)
   checkmate::assert_string(output_fields)
+  checkmate::assert_logical(verbose, any.missing = FALSE, len = 1)
   assert_address_fields(address_fields, locations)
   cache <- assert_and_assign_cache(cache)
 
@@ -88,7 +93,8 @@ geocode <- function(locations,
     address_fields = address_fields,
     location_type = location_type,
     output_fields = output_fields,
-    cache = cache
+    cache = cache,
+    verbose = verbose
   )
 
   return(geocoded_data)
@@ -99,17 +105,25 @@ geocode_addresses <- function(locations,
                               address_fields,
                               location_type,
                               output_fields,
-                              cache) {
+                              cache,
+                              verbose) {
   if (isFALSE(cache)) {
+    inform_geocoding_without_cache(verbose)
+
     output_file <- do_geocode(
       locations,
       locator = locator,
       address_fields = address_fields,
       location_type = location_type,
-      output_fields = output_fields
+      output_fields = output_fields,
+      verbose = verbose
     )
 
-    geocoded_data <- read_geocoded_data_from_path(output_file, address_fields)
+    geocoded_data <- read_geocoded_data_from_path(
+      output_file,
+      address_fields,
+      verbose = verbose
+    )
 
     return(geocoded_data)
   }
@@ -123,25 +137,33 @@ geocode_addresses <- function(locations,
   #     os endereços)
   #  4) ao final, adicionamos os endereços recém geolocalizados ao cache
 
-  cache_path <- file.path("../../data-raw/geocode_cache", paste0(cache, ".rds"))
+  cache_path <- fs::path_norm(
+    file.path("../../data-raw/geocode_cache", paste0(cache, ".rds"))
+  )
 
   if (file.exists(cache_path)) {
+    inform_geocoding_with_cache(verbose, cache_path)
+
     geocoded_data <- geocode_with_previous_cache(
       locations,
       locator = locator,
       address_fields = address_fields,
       location_type = location_type,
       output_fields = output_fields,
-      cache_path = cache_path
+      cache_path = cache_path,
+      verbose = verbose
     )
   } else {
+    inform_initializing_cache(verbose, cache_path)
+
     geocoded_data <- geocode_without_previous_cache(
       locations,
       locator = locator,
       address_fields = address_fields,
       location_type = location_type,
       output_fields = output_fields,
-      cache_path = cache_path
+      cache_path = cache_path,
+      verbose = verbose
     )
   }
 
@@ -153,18 +175,22 @@ geocode_with_previous_cache <- function(locations,
                                         address_fields,
                                         location_type,
                                         output_fields,
-                                        cache_path) {
+                                        cache_path,
+                                        verbose) {
+  inform_reading_cache(verbose)
   cache_data <- readRDS(cache_path)
 
   lookup_vector <- names(address_fields)
   names(lookup_vector) <- address_fields
+
+  inform_merging_cache(verbose)
 
   lookup_expression <- build_lookup_expression()
   locations_with_data <- data.table::as.data.table(locations)
   locations_with_data[cache_data, on = lookup_vector, eval(lookup_expression)]
 
   cached_data <- locations_with_data[!is.na(Score)]
-  cached_data <- format_cached_addresses(cached_data, names(locations))
+  cached_data <- format_cached_addresses(cached_data, names(locations), verbose)
 
   uncached_locations <- locations_with_data[is.na(Score)]
   new_geocoded_data <- geocode_and_append_to_cache(
@@ -174,7 +200,8 @@ geocode_with_previous_cache <- function(locations,
     locator = locator,
     address_fields = address_fields,
     location_type = location_type,
-    output_fields = output_fields
+    output_fields = output_fields,
+    verbose = verbose
   )
 
   geocoded_data <- rbind(
@@ -206,7 +233,9 @@ build_lookup_expression <- function() {
   return(expr)
 }
 
-format_cached_addresses <- function(cached_data, locations_names) {
+format_cached_addresses <- function(cached_data, locations_names, verbose) {
+  inform_creating_sf_from_cache(verbose, nrow(cached_data))
+
   data.table::setcolorder(
     cached_data,
     c(setdiff(names(cached_data), locations_names), locations_names)
@@ -250,10 +279,13 @@ geocode_and_append_to_cache <- function(uncached_locations,
                                         locator,
                                         address_fields,
                                         location_type,
-                                        output_fields) {
+                                        output_fields,
+                                        verbose) {
   if (nrow(uncached_locations) == 0) {
     return(empty_geocoded_data(address_fields))
   }
+
+  inform_geocoding_uncached(verbose, nrow(uncached_locations))
 
   uncached_locations[
     ,
@@ -265,12 +297,14 @@ geocode_and_append_to_cache <- function(uncached_locations,
     locator = locator,
     address_fields = address_fields,
     location_type = location_type,
-    output_fields = output_fields
+    output_fields = output_fields,
+    verbose = verbose
   )
 
   new_geocoded_data <- read_geocoded_data_from_path(
     new_geocoded_data_path,
-    address_fields
+    address_fields,
+    verbose = verbose
   )
 
   append_to_cache(
@@ -278,7 +312,8 @@ geocode_and_append_to_cache <- function(uncached_locations,
     cache_data = cache_data,
     cache_path = cache_path,
     address_fields = address_fields,
-    location_type = location_type
+    location_type = location_type,
+    verbose = verbose
   )
 
   return(new_geocoded_data)
@@ -322,16 +357,22 @@ append_to_cache <- function(new_geocoded_data,
                             cache_data,
                             cache_path,
                             address_fields,
-                            location_type) {
+                            location_type,
+                            verbose) {
+  inform_appending_to_cache(verbose)
+
   new_data_in_cache_structure <- to_cache_structure(
     new_geocoded_data,
     address_fields = address_fields,
     location_type = location_type,
-    lookup_only = FALSE
+    lookup_only = FALSE,
+    verbose = verbose
   )
   new_data_in_cache_structure <- unique(new_data_in_cache_structure)
 
   cache_data <- rbind(cache_data, new_data_in_cache_structure)
+
+  inform_saving_cache(verbose)
   saveRDS(cache_data, cache_path)
 
   return(invisible(cache_path))
@@ -342,22 +383,29 @@ geocode_without_previous_cache <- function(locations,
                                            address_fields,
                                            location_type,
                                            output_fields,
-                                           cache_path) {
+                                           cache_path,
+                                           verbose) {
   geocoded_path <- do_geocode(
     locations,
     locator = locator,
     address_fields = address_fields,
     location_type = location_type,
-    output_fields = output_fields
+    output_fields = output_fields,
+    verbose = verbose
   )
 
-  geocoded_data <- read_geocoded_data_from_path(geocoded_path, address_fields)
+  geocoded_data <- read_geocoded_data_from_path(
+    geocoded_path,
+    address_fields,
+    verbose
+  )
 
   create_geocode_cache(
     geocoded_data,
     address_fields = address_fields,
     location_type = location_type,
-    cache_path = cache_path
+    cache_path = cache_path,
+    verbose = verbose
   )
 
   return(geocoded_data)
@@ -367,7 +415,9 @@ do_geocode <- function(locations,
                        locator,
                        address_fields,
                        location_type,
-                       output_fields) {
+                       output_fields,
+                       verbose) {
+  inform_writing_input_to_csv(verbose)
   tmpfile_input <- tempfile("geocode_input", fileext = ".csv")
   data.table::fwrite(locations, tmpfile_input)
 
@@ -382,6 +432,8 @@ do_geocode <- function(locations,
   # pra "silenciar" o output da função. estamos realmente interessados no
   # "side-effect" da função abaixo, que é geolocalizar os endereços e escrever
   # o output na camada geocode_result do geodatabase de output
+
+  inform_geocoding(verbose)
 
   geocode_fn_output <- arcpy$geocoding$GeocodeAddresses(
     in_table = tmpfile_input,
@@ -450,7 +502,9 @@ fields_to_string <- function(address_fields) {
   return(fields_string)
 }
 
-read_geocoded_data_from_path <- function(output_file, address_fields) {
+read_geocoded_data_from_path <- function(output_file, address_fields, verbose) {
+  inform_reading_to_sf(verbose)
+
   geocoded_data <- sf::st_read(
     output_file,
     layer = "geocode_result",
@@ -484,15 +538,18 @@ read_geocoded_data_from_path <- function(output_file, address_fields) {
 create_geocode_cache <- function(geocoded_data,
                                  address_fields,
                                  location_type,
-                                 cache_path) {
+                                 cache_path,
+                                 verbose) {
   data_in_cache_structure <- to_cache_structure(
     geocoded_data,
     address_fields = address_fields,
     location_type = location_type,
-    lookup_only = FALSE
+    lookup_only = FALSE,
+    verbose = verbose
   )
   data_in_cache_structure <- unique(data_in_cache_structure)
 
+  inform_saving_cache(verbose)
   saveRDS(data_in_cache_structure, cache_path)
 
   return(invisible(cache_path))
@@ -501,7 +558,10 @@ create_geocode_cache <- function(geocoded_data,
 to_cache_structure <- function(geocoded_data,
                                address_fields,
                                location_type,
-                               lookup_only) {
+                               lookup_only,
+                               verbose) {
+  inform_formatting_data(verbose)
+
   arcpy_params <- "location_type"
   all_address_fields <- c(
     "Address_or_Place",

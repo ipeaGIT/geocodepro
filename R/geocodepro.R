@@ -7,4 +7,4 @@
 #' @keywords internal
 "_PACKAGE"
 
-utils::globalVariables(c("Shape", "geometry", "Score"))
+utils::globalVariables(c("Shape", "geometry", "Score", "Lon"))

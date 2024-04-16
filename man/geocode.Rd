@@ -10,7 +10,8 @@ geocode(
   address_fields = address_fields_const(),
   location_type = "ROUTING_LOCATION",
   output_fields = "MINIMAL",
-  cache = TRUE
+  cache = TRUE,
+  verbose = TRUE
 )
 }
 \arguments{
@@ -55,6 +56,9 @@ específico. Por exemplo, pode ser útil usar um cache apenas para endereços
 da RAIS, caso em que temos que passar \code{"rais"}. Caso desejemos invalidar
 este cache e começar um novo cache da RAIS do zero, podemos passar
 \code{"rais_v2"}.}
+
+\item{verbose}{Um logical. Se mensagens informativas devem ser printadas
+(padrão) ou não.}
 }
 \value{
 Um objeto \code{sf} do tipo \code{POINT} com a localização dos endereços
@@ -86,7 +90,8 @@ result <- geocode(
     City = "cidade",
     State = "uf",
     ZIP = "cep"
-  )
+  ),
+  cache = FALSE
 )
 
 }

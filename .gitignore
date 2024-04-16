@@ -3,3 +3,6 @@
 .RData
 .Ruserdata
 README.html
+locations.csv
+geocode
+geocode.db
