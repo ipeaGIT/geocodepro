@@ -69,42 +69,33 @@ test_that("outputs correct messages when not using cache", {
   expect_snapshot(result <- tester(cache = FALSE))
 })
 
-# comentando esse teste temporariamente enquanto nao faco o cache funcionar certinho nos testes
+test_that("outputs correct messages when using cache", {
+  cache_name <- "_test_cache"
+  cache_path <- file.path(
+    tools::R_user_dir("geocodepro", "cache"),
+    paste0(cache_name, ".rds")
+  )
+  expect_false(file.exists(cache_path))
+  on.exit(
+    expect_true(file.remove(cache_path)),
+    add = TRUE
+  )
 
-# test_that("outputs correct messages when using cache", {
-#   cache_name <- "_test_cache"
-#   cache_path <- file.path(
-#     "../../data-raw/geocode_cache",
-#     paste0(cache_name, ".rds")
-#   )
-#   expect_false(file.exists(cache_path))
-#   on.exit(
-#     expect_true(file.remove(cache_path)),
-#     add = TRUE
-#   )
-#
-#   wd <- getwd()
-#   print(wd)
-#   if (basename(wd) == "testthat") {
-#     setwd("../..")
-#     on.exit(setwd(wd), add = TRUE)
-#   }
-#
-#   # initializing cache
-#   expect_snapshot(result <- tester(cache = "_test_cache"))
-#
-#   # all locations cached
-#   expect_snapshot(result <- tester(cache = "_test_cache"))
-#
-#   additional_address <- data.frame(
-#     logradouro = "Avenida Venceslau Brás, 71",
-#     bairro = "Botafogo",
-#     cidade = "Rio de Janeiro",
-#     uf = "RJ",
-#     cep = "22290-140"
-#   )
-#   addresses <- rbind(address, additional_address)
-#
-#   # using existing cache
-#   expect_snapshot(result <- tester(addresses, cache = "_test_cache"))
-# })
+  # initializing cache
+  expect_snapshot(result <- tester(cache = "_test_cache"))
+
+  # all locations cached
+  expect_snapshot(result <- tester(cache = "_test_cache"))
+
+  additional_address <- data.frame(
+    logradouro = "Avenida Venceslau Brás, 71",
+    bairro = "Botafogo",
+    cidade = "Rio de Janeiro",
+    uf = "RJ",
+    cep = "22290-140"
+  )
+  addresses <- rbind(address, additional_address)
+
+  # using existing cache
+  expect_snapshot(result <- tester(addresses, cache = "_test_cache"))
+})

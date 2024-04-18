@@ -68,7 +68,7 @@
 #'     State = "uf",
 #'     ZIP = "cep"
 #'   ),
-#'   cache = FALSE
+#'   cache = "example_cache"
 #' )
 #'
 #' @export
@@ -137,9 +137,10 @@ geocode_addresses <- function(locations,
   #     os endereços)
   #  4) ao final, adicionamos os endereços recém geolocalizados ao cache
 
-  cache_path <- fs::path_norm(
-    file.path("../../data-raw/geocode_cache", paste0(cache, ".rds"))
-  )
+  cache_dir <- tools::R_user_dir("geocodepro", which = "cache")
+  if (!dir.exists(cache_dir)) dir.create(cache_dir, recursive = TRUE)
+
+  cache_path <- fs::path_norm(file.path(cache_dir, paste0(cache, ".rds")))
 
   if (file.exists(cache_path)) {
     inform_geocoding_with_cache(verbose, cache_path)

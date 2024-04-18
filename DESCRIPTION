@@ -17,7 +17,8 @@ Imports:
     reticulate,
     rlang,
     sf,
-    sfheaders
+    sfheaders,
+    tools
 Suggests: 
     dplyr,
     maptiles,

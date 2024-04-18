@@ -91,7 +91,7 @@ result <- geocode(
     State = "uf",
     ZIP = "cep"
   ),
-  cache = FALSE
+  cache = "example_cache"
 )
 
 }
