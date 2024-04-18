@@ -261,10 +261,16 @@ format_cached_addresses <- function(cached_data, locations_names, verbose) {
 
     cached_data <- rbind(non_na_coords_data, na_coords_data)
   } else {
-    cached_data <- sf::st_as_sf(
-      cached_data,
-      coords = c("Lon", "Lat"),
-      crs = 4326
+    # raises a warning if cached_data is empty, but we don't need to worry about
+    # this because this sf is later bound to another with data and the correct
+    # bounding box is then calculated
+
+    suppressWarnings(
+      cached_data <- sf::st_as_sf(
+        cached_data,
+        coords = c("Lon", "Lat"),
+        crs = 4326
+      )
     )
   }
 
