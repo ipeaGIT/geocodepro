@@ -604,6 +604,10 @@ to_cache_structure <- function(geocoded_data,
     old = address_fields,
     new = names(address_fields)
   )
+  cache_data[
+    ,
+    setdiff(names(cache_data), c(all_address_fields, geocode_cols)) := NULL
+  ]
 
   env <- environment()
   cache_data <- rbind(empty_table, cache_data, fill = TRUE)
