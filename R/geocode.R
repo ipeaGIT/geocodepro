@@ -287,10 +287,17 @@ geocode_and_append_to_cache <- function(uncached_locations,
 
   inform_geocoding_uncached(verbose, nrow(uncached_locations))
 
-  uncached_locations[
-    ,
-    setdiff(names(uncached_locations), address_fields) := NULL
-  ]
+  geocode_cols <- c(
+    "Status",
+    "Score",
+    "Match_type",
+    "Match_addr",
+    "Addr_type",
+    "Lon",
+    "Lat"
+  )
+
+  uncached_locations[, (geocode_cols) := NULL]
 
   new_geocoded_data_path <- do_geocode(
     uncached_locations,
