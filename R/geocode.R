@@ -140,7 +140,7 @@ geocode_addresses <- function(locations,
   cache_dir <- tools::R_user_dir("geocodepro", which = "cache")
   if (!dir.exists(cache_dir)) dir.create(cache_dir, recursive = TRUE)
 
-  cache_path <- fs::path_norm(file.path(cache_dir, paste0(cache, ".rds")))
+  cache_path <- fs::path_norm(file.path(cache_dir, paste0(cache, ".csv")))
 
   if (file.exists(cache_path)) {
     inform_geocoding_with_cache(verbose, cache_path)
@@ -178,8 +178,7 @@ geocode_with_previous_cache <- function(locations,
                                         output_fields,
                                         cache_path,
                                         verbose) {
-  inform_reading_cache(verbose)
-  cache_data <- readRDS(cache_path)
+  cache_data <- read_cache_data(cache_path, address_fields, verbose)
 
   lookup_vector <- names(address_fields)
   names(lookup_vector) <- address_fields
@@ -188,6 +187,7 @@ geocode_with_previous_cache <- function(locations,
 
   lookup_expression <- build_lookup_expression()
   locations_with_data <- data.table::as.data.table(locations)
+  data.table::setkeyv(locations_with_data, address_fields)
   locations_with_data[cache_data, on = lookup_vector, eval(lookup_expression)]
 
   cached_data <- locations_with_data[!is.na(Score)]
@@ -211,6 +211,23 @@ geocode_with_previous_cache <- function(locations,
   )
 
   return(geocoded_data)
+}
+
+read_cache_data <- function(cache_path, address_fields, verbose) {
+  inform_reading_cache(verbose)
+
+  sample_row <- data.table::fread(cache_path, na.strings = "", nrows = 1)
+  numeric_cols <- c("Score", "Lon", "Lat")
+  char_cols <- setdiff(names(sample_row), numeric_cols)
+
+  cache_data <- data.table::fread(
+    cache_path,
+    na.strings = "",
+    select = list(numeric = numeric_cols, character = char_cols)
+  )
+  data.table::setkeyv(cache_data, names(address_fields))
+
+  return(cache_data)
 }
 
 build_lookup_expression <- function() {
@@ -387,7 +404,7 @@ append_to_cache <- function(new_geocoded_data,
   cache_data <- rbind(cache_data, new_data_in_cache_structure)
 
   inform_saving_cache(verbose)
-  saveRDS(cache_data, cache_path)
+  data.table::fwrite(cache_data, cache_path)
 
   return(invisible(cache_path))
 }
@@ -564,7 +581,7 @@ create_geocode_cache <- function(geocoded_data,
   data_in_cache_structure <- unique(data_in_cache_structure)
 
   inform_saving_cache(verbose)
-  saveRDS(data_in_cache_structure, cache_path)
+  data.table::fwrite(data_in_cache_structure, cache_path)
 
   return(invisible(cache_path))
 }

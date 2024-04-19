@@ -73,7 +73,7 @@ test_that("outputs correct messages when using cache", {
   cache_name <- "_test_cache"
   cache_path <- file.path(
     tools::R_user_dir("geocodepro", "cache"),
-    paste0(cache_name, ".rds")
+    paste0(cache_name, ".csv")
   )
   expect_false(file.exists(cache_path))
   on.exit(
