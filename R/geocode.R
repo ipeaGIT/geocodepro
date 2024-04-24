@@ -171,6 +171,19 @@ geocode_addresses <- function(locations,
   return(geocoded_data)
 }
 
+glbl_all_address_fields <- c(
+  "Address_or_Place",
+  "Address2",
+  "Address3",
+  "Neighborhood",
+  "City",
+  "County",
+  "State",
+  "ZIP",
+  "ZIP4",
+  "Country"
+)
+
 geocode_with_previous_cache <- function(locations,
                                         locator,
                                         address_fields,
@@ -180,18 +193,24 @@ geocode_with_previous_cache <- function(locations,
                                         verbose) {
   cache_data <- read_cache_data(cache_path, address_fields, verbose)
 
-  lookup_vector <- names(address_fields)
-  names(lookup_vector) <- address_fields
-
   inform_merging_cache(verbose)
 
   lookup_expression <- build_lookup_expression()
-  locations_with_data <- data.table::as.data.table(locations)
-  data.table::setkeyv(locations_with_data, address_fields)
-  locations_with_data[cache_data, on = lookup_vector, eval(lookup_expression)]
+
+  locations_with_data <- format_location_data(locations, address_fields)
+  locations_with_data[
+    cache_data,
+    on = glbl_all_address_fields,
+    eval(lookup_expression)
+  ]
 
   cached_data <- locations_with_data[!is.na(Score)]
-  cached_data <- format_cached_addresses(cached_data, names(locations), verbose)
+  cached_data <- format_cached_addresses(
+    cached_data,
+    address_fields = address_fields,
+    locations_names = names(locations),
+    verbose = verbose
+  )
 
   uncached_locations <- locations_with_data[is.na(Score)]
   new_geocoded_data <- geocode_and_append_to_cache(
@@ -213,6 +232,26 @@ geocode_with_previous_cache <- function(locations,
   return(geocoded_data)
 }
 
+format_location_data <- function(locations, address_fields) {
+  formatted_locations <- data.table::as.data.table(locations)
+
+  data.table::setnames(
+    formatted_locations,
+    old = address_fields,
+    new = names(address_fields)
+  )
+
+  missing_fields <- setdiff(glbl_all_address_fields, names(formatted_locations))
+  formatted_locations[, (missing_fields) := NA_character_]
+
+  formatted_locations <- data.table::setkeyv(
+    formatted_locations,
+    glbl_all_address_fields
+  )
+
+  return(formatted_locations)
+}
+
 read_cache_data <- function(cache_path, address_fields, verbose) {
   inform_reading_cache(verbose)
 
@@ -225,7 +264,7 @@ read_cache_data <- function(cache_path, address_fields, verbose) {
     na.strings = "",
     select = list(numeric = numeric_cols, character = char_cols)
   )
-  data.table::setkeyv(cache_data, names(address_fields))
+  data.table::setkeyv(cache_data, glbl_all_address_fields)
 
   return(cache_data)
 }
@@ -251,8 +290,21 @@ build_lookup_expression <- function() {
   return(expr)
 }
 
-format_cached_addresses <- function(cached_data, locations_names, verbose) {
+format_cached_addresses <- function(cached_data,
+                                    address_fields,
+                                    locations_names,
+                                    verbose) {
   inform_creating_sf_from_cache(verbose, nrow(cached_data))
+
+  filled_fields <- setdiff(glbl_all_address_fields, names(address_fields))
+  cached_data[, (filled_fields) := NULL]
+
+  data.table::setnames(
+    cached_data,
+    old = names(address_fields),
+    new = address_fields
+  )
+  data.table::setkey(cached_data, NULL)
 
   data.table::setcolorder(
     cached_data,
@@ -322,6 +374,16 @@ geocode_and_append_to_cache <- function(uncached_locations,
   )
 
   uncached_locations[, (geocode_cols) := NULL]
+
+  filled_fields <- setdiff(glbl_all_address_fields, names(address_fields))
+  uncached_locations[, (filled_fields) := NULL]
+
+  data.table::setnames(
+    uncached_locations,
+    old = names(address_fields),
+    new = address_fields
+  )
+  data.table::setkey(uncached_locations, NULL)
 
   new_geocoded_data_path <- do_geocode(
     uncached_locations,
