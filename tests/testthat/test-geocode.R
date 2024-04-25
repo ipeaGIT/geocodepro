@@ -71,15 +71,9 @@ test_that("outputs correct messages when not using cache", {
 
 test_that("outputs correct messages when using cache", {
   cache_name <- "_test_cache"
-  cache_path <- file.path(
-    tools::R_user_dir("geocodepro", "cache"),
-    paste0(cache_name, ".csv")
-  )
+  cache_path <- file.path(tools::R_user_dir("geocodepro", "cache"), cache_name)
   expect_false(file.exists(cache_path))
-  on.exit(
-    expect_true(file.remove(cache_path)),
-    add = TRUE
-  )
+  on.exit(fs::dir_delete(cache_path), add = TRUE)
 
   # initializing cache
   expect_snapshot(result <- tester(cache = "_test_cache"))

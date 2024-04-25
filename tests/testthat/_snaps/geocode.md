@@ -13,7 +13,7 @@
     Code
       result <- tester(cache = "_test_cache")
     Message
-      Geocoding with cache. Initializing cache at 'C:/Users/b14912846767/AppData/Local/R/cache/R/geocodepro/_test_cache.csv'.
+      Geocoding with cache. Initializing cache at 'C:/Users/b14912846767/AppData/Local/R/cache/R/geocodepro/_test_cache'.
       * Writing input to csv.
       * Geocoding.
       * Reading geocode result to sf.
@@ -25,7 +25,7 @@
     Code
       result <- tester(cache = "_test_cache")
     Message
-      Geocoding with cache found at 'C:/Users/b14912846767/AppData/Local/R/cache/R/geocodepro/_test_cache.csv'.
+      Geocoding with cache found at 'C:/Users/b14912846767/AppData/Local/R/cache/R/geocodepro/_test_cache'.
       * Reading cache.
       * Merging cache with location data.
       * Creating `sf` from cached data. Found 1 address in cache.
@@ -35,7 +35,7 @@
     Code
       result <- tester(addresses, cache = "_test_cache")
     Message
-      Geocoding with cache found at 'C:/Users/b14912846767/AppData/Local/R/cache/R/geocodepro/_test_cache.csv'.
+      Geocoding with cache found at 'C:/Users/b14912846767/AppData/Local/R/cache/R/geocodepro/_test_cache'.
       * Reading cache.
       * Merging cache with location data.
       * Creating `sf` from cached data. Found 1 address in cache.

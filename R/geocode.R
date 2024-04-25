@@ -137,13 +137,24 @@ geocode_addresses <- function(locations,
   #     os endereços)
   #  4) ao final, adicionamos os endereços recém geolocalizados ao cache
 
-  cache_dir <- tools::R_user_dir("geocodepro", which = "cache")
+  package_cache <- tools::R_user_dir("geocodepro", which = "cache")
+  if (!dir.exists(package_cache)) dir.create(package_cache, recursive = TRUE)
+
+  cache_dir <- fs::path_norm(file.path(package_cache, cache))
   if (!dir.exists(cache_dir)) dir.create(cache_dir, recursive = TRUE)
 
-  cache_path <- fs::path_norm(file.path(cache_dir, paste0(cache, ".csv")))
+  parquet_cache_files <- list.files(cache_dir, pattern = "\\.parquet$")
+  cache_exists <- length(parquet_cache_files) > 0
 
-  if (file.exists(cache_path)) {
-    inform_geocoding_with_cache(verbose, cache_path)
+  # even though arcpy is delayed loaded in .onLoad(), this other call also needs
+  # to come here in order to use {arrow}. arrow also uses reticulate and for
+  # some reason it overrides the python libraries/condaenv/arcpy version used in
+  # our condaenv, even if we set it before. a solution is to "force" the
+  # condaenv by making this non-delayed call here as well.
+  invisible(reticulate::import("arcpy"))
+
+  if (cache_exists) {
+    inform_geocoding_with_cache(verbose, cache_dir)
 
     geocoded_data <- geocode_with_previous_cache(
       locations,
@@ -151,11 +162,11 @@ geocode_addresses <- function(locations,
       address_fields = address_fields,
       location_type = location_type,
       output_fields = output_fields,
-      cache_path = cache_path,
+      cache_dir = cache_dir,
       verbose = verbose
     )
   } else {
-    inform_initializing_cache(verbose, cache_path)
+    inform_initializing_cache(verbose, cache_dir)
 
     geocoded_data <- geocode_without_previous_cache(
       locations,
@@ -163,7 +174,7 @@ geocode_addresses <- function(locations,
       address_fields = address_fields,
       location_type = location_type,
       output_fields = output_fields,
-      cache_path = cache_path,
+      cache_dir = cache_dir,
       verbose = verbose
     )
   }
@@ -189,9 +200,9 @@ geocode_with_previous_cache <- function(locations,
                                         address_fields,
                                         location_type,
                                         output_fields,
-                                        cache_path,
+                                        cache_dir,
                                         verbose) {
-  cache_data <- read_cache_data(cache_path, address_fields, verbose)
+  cache_data <- read_cache_data(cache_dir, verbose)
 
   inform_merging_cache(verbose)
 
@@ -215,8 +226,7 @@ geocode_with_previous_cache <- function(locations,
   uncached_locations <- locations_with_data[is.na(Score)]
   new_geocoded_data <- geocode_and_append_to_cache(
     uncached_locations,
-    cache_data = cache_data,
-    cache_path = cache_path,
+    cache_dir = cache_dir,
     locator = locator,
     address_fields = address_fields,
     location_type = location_type,
@@ -252,18 +262,12 @@ format_location_data <- function(locations, address_fields) {
   return(formatted_locations)
 }
 
-read_cache_data <- function(cache_path, address_fields, verbose) {
+read_cache_data <- function(cache_dir, verbose) {
   inform_reading_cache(verbose)
 
-  sample_row <- data.table::fread(cache_path, na.strings = "", nrows = 1)
-  numeric_cols <- c("Score", "Lon", "Lat")
-  char_cols <- setdiff(names(sample_row), numeric_cols)
+  cache_data <- arrow::open_dataset(cache_dir)
+  cache_data <- dplyr::collect(cache_data)
 
-  cache_data <- data.table::fread(
-    cache_path,
-    na.strings = "",
-    select = list(numeric = numeric_cols, character = char_cols)
-  )
   data.table::setkeyv(cache_data, glbl_all_address_fields)
 
   return(cache_data)
@@ -350,8 +354,7 @@ format_cached_addresses <- function(cached_data,
 }
 
 geocode_and_append_to_cache <- function(uncached_locations,
-                                        cache_data,
-                                        cache_path,
+                                        cache_dir,
                                         locator,
                                         address_fields,
                                         location_type,
@@ -402,8 +405,7 @@ geocode_and_append_to_cache <- function(uncached_locations,
 
   append_to_cache(
     new_geocoded_data,
-    cache_data = cache_data,
-    cache_path = cache_path,
+    cache_dir = cache_dir,
     address_fields = address_fields,
     location_type = location_type,
     verbose = verbose
@@ -447,8 +449,7 @@ empty_geocoded_data <- function(address_fields) {
 }
 
 append_to_cache <- function(new_geocoded_data,
-                            cache_data,
-                            cache_path,
+                            cache_dir,
                             address_fields,
                             location_type,
                             verbose) {
@@ -463,10 +464,9 @@ append_to_cache <- function(new_geocoded_data,
   )
   new_data_in_cache_structure <- unique(new_data_in_cache_structure)
 
-  cache_data <- rbind(cache_data, new_data_in_cache_structure)
-
   inform_saving_cache(verbose)
-  data.table::fwrite(cache_data, cache_path)
+  cache_path <- create_cache_path(cache_dir)
+  arrow::write_parquet(new_data_in_cache_structure, cache_path)
 
   return(invisible(cache_path))
 }
@@ -476,7 +476,7 @@ geocode_without_previous_cache <- function(locations,
                                            address_fields,
                                            location_type,
                                            output_fields,
-                                           cache_path,
+                                           cache_dir,
                                            verbose) {
   geocoded_path <- do_geocode(
     locations,
@@ -497,7 +497,7 @@ geocode_without_previous_cache <- function(locations,
     geocoded_data,
     address_fields = address_fields,
     location_type = location_type,
-    cache_path = cache_path,
+    cache_dir = cache_dir,
     verbose = verbose
   )
 
@@ -631,7 +631,7 @@ read_geocoded_data_from_path <- function(output_file, address_fields, verbose) {
 create_geocode_cache <- function(geocoded_data,
                                  address_fields,
                                  location_type,
-                                 cache_path,
+                                 cache_dir,
                                  verbose) {
   data_in_cache_structure <- to_cache_structure(
     geocoded_data,
@@ -643,7 +643,8 @@ create_geocode_cache <- function(geocoded_data,
   data_in_cache_structure <- unique(data_in_cache_structure)
 
   inform_saving_cache(verbose)
-  data.table::fwrite(data_in_cache_structure, cache_path)
+  cache_path <- create_cache_path(cache_dir)
+  arrow::write_parquet(data_in_cache_structure, cache_path)
 
   return(invisible(cache_path))
 }
@@ -717,4 +718,13 @@ point_to_coords <- function(geocoded_data) {
   geocoded_data <- data.table::setDT(cbind(geocoded_data, coords))
 
   return(geocoded_data)
+}
+
+create_cache_path <- function(cache_dir) {
+  current_time <- Sys.time()
+  time_string <- format(current_time, "%Y%m%d_%H%M%S")
+
+  cache_path <- file.path(cache_dir, paste0(time_string, ".parquet"))
+
+  return(cache_path)
 }
