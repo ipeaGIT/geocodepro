@@ -3,7 +3,6 @@
 \docType{package}
 \name{geocodepro}
 \alias{geocodepro}
-\alias{_PACKAGE}
 \alias{geocodepro-package}
 \title{geocodepro: Geolocalização com o ArcGIS Pro}
 \description{
