@@ -2,37 +2,39 @@
 #'
 #' Geolocaliza um dataframe de endereços com base em diferentes atributos.
 #' Documentação da ferramenta:
-#' https://pro.arcgis.com/en/pro-app/latest/tool-reference/geocoding/geocode-addresses.htm.
+#' <https://pro.arcgis.com/en/pro-app/latest/tool-reference/geocoding/geocode-addresses.htm>.
+#' O output do geocode  traz um conjunto de colunas que indicam o grau de precisão
+#' do resultado dos endereços que foram geolocalizados O grau de precisão aceitável
+#' depende do objetivo e escopo de cada pesquisa. A definição exata de cada coluna
+#' se encontra na documentação  do ArcGIS: <https://pro.arcgis.com/en/pro-app/latest/help/data/geocoding/what-is-included-in-the-geocoded-results-.htm>
 #'
-#' @param locations Um dataframe. Os endereços que devem ser geolocalizados.
+#' @param locations Um `data.frame` com os endereços que devem ser geolocalizados.
 #'   Deve conter todas as colunas especificadas em `address_fields`.
 #' @param locator Uma string. O caminho até o localizador que deve ser
 #'   utilizado. Por padrão, utiliza o localizador incluído no ArcGIS Pro para o
 #'   Brasil.
-#' @param address_fields Um vetor de caracteres. A correspondência entre as
-#'   colunas do dataframe e os campos de geolocalização utilizados pelo ArcGIS
-#'   Pro, em que os nomes do vetor são os campos esperados pela ferramenta e os
-#'   valores são as colunas correspondentes. A função `address_fields_const()`
-#'   serve para facilitar a criação deste vetor, fazendo também algumas
-#'   verificações em seu conteúdo. Note que itens com o valor `NULL` são
-#'   ignorados, e que a função deve receber ao menos um valor diferente de nulo.
-#'   Caso esteja criando o vetor manualmente, note que os nomes dos elementos
-#'   devem ser os mesmos nomes dos parâmetros da função
-#'   `address_fields_const()`.
+#' @param address_fields Um vetor de caracteres. A correspondência entre os nomes
+#'   das colunas do data.frame `locations` e os campos de geolocalização utilizados
+#'   pelo ArcGIS Pro. A função `address_fields_const()` serve para facilitar a
+#'   criação deste vetor, fazendo também algumas verificações em seu conteúdo.
+#'   Note que itens com o valor `NULL` são ignorados, e que a função deve receber
+#'   ao menos um valor diferente de nulo. Caso esteja criando o vetor manualmente,
+#'   note que os nomes dos elementos devem ser os mesmos nomes dos parâmetros da
+#'   função `address_fields_const()`.
 #' @param location_type Uma string. Interfere na localização final de cada
 #'   endereço geolocalizado. As opções são `"ROUTING_LOCATION"` (padrão), em que
-#'   os endereços são posicionados ao longo da rua, e é considerado mais
-#'   apropriado para roteamento, ou `"ADDRESS_LOCATION"`, em que endereços são
-#'   localizados em uma posição equivalente ao "terraço" do endereço (no
+#'   os endereços são posicionados ao longo do sistema viário, e é considerado
+#'   mais apropriado para roteamento, ou `"ADDRESS_LOCATION"`, em que endereços
+#'   são localizados em uma posição equivalente ao "terraço" do endereço (no
 #'   centroide do polígono correspondente).
 #' @param output_fields Uma string. As colunas que serão retornadas no output.
 #'   Possíveis opções são `"MINIMAL"` (padrão), que inclui as colunas do
-#'   dataframe de input e outros campos que descrevem o quão boa foi a
+#'   data.frame de input e outros campos que descrevem o quão boa foi a
 #'   correspondência entre a geolocalização e o endereço, `"ALL"`, que inclui
 #'   todas as opções disponibilizadas pelo localizador, e `"LOCATION_ONLY"`, que
 #'   inclui apenas a geolocalização do endereço e as colunas do input.
 #' @param cache Um logical (por padrão, `TRUE`) ou uma string. Se `TRUE`, é
-#'   utilizado um cache "geral" tanto para buscar localizações que já tenham
+#'   utilizado um cache "geral" tanto para buscar engereços que já tenham
 #'   sido geolocalizadas antes quanto para adicionar quaisquer pontos que tenham
 #'   sido geolocalizados na operação corrente. Se `FALSE`, nenhum cache é usado.
 #'   Caso seja uma string, seu valor é utilizado para identificar um cache

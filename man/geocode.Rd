@@ -15,40 +15,38 @@ geocode(
 )
 }
 \arguments{
-\item{locations}{Um dataframe. Os endereços que devem ser geolocalizados.
+\item{locations}{Um \code{data.frame} com os endereços que devem ser geolocalizados.
 Deve conter todas as colunas especificadas em \code{address_fields}.}
 
 \item{locator}{Uma string. O caminho até o localizador que deve ser
 utilizado. Por padrão, utiliza o localizador incluído no ArcGIS Pro para o
 Brasil.}
 
-\item{address_fields}{Um vetor de caracteres. A correspondência entre as
-colunas do dataframe e os campos de geolocalização utilizados pelo ArcGIS
-Pro, em que os nomes do vetor são os campos esperados pela ferramenta e os
-valores são as colunas correspondentes. A função \code{address_fields_const()}
-serve para facilitar a criação deste vetor, fazendo também algumas
-verificações em seu conteúdo. Note que itens com o valor \code{NULL} são
-ignorados, e que a função deve receber ao menos um valor diferente de nulo.
-Caso esteja criando o vetor manualmente, note que os nomes dos elementos
-devem ser os mesmos nomes dos parâmetros da função
-\code{address_fields_const()}.}
+\item{address_fields}{Um vetor de caracteres. A correspondência entre os nomes
+das colunas do data.frame \code{locations} e os campos de geolocalização utilizados
+pelo ArcGIS Pro. A função \code{address_fields_const()} serve para facilitar a
+criação deste vetor, fazendo também algumas verificações em seu conteúdo.
+Note que itens com o valor \code{NULL} são ignorados, e que a função deve receber
+ao menos um valor diferente de nulo. Caso esteja criando o vetor manualmente,
+note que os nomes dos elementos devem ser os mesmos nomes dos parâmetros da
+função \code{address_fields_const()}.}
 
 \item{location_type}{Uma string. Interfere na localização final de cada
 endereço geolocalizado. As opções são \code{"ROUTING_LOCATION"} (padrão), em que
-os endereços são posicionados ao longo da rua, e é considerado mais
-apropriado para roteamento, ou \code{"ADDRESS_LOCATION"}, em que endereços são
-localizados em uma posição equivalente ao "terraço" do endereço (no
+os endereços são posicionados ao longo do sistema viário, e é considerado
+mais apropriado para roteamento, ou \code{"ADDRESS_LOCATION"}, em que endereços
+são localizados em uma posição equivalente ao "terraço" do endereço (no
 centroide do polígono correspondente).}
 
 \item{output_fields}{Uma string. As colunas que serão retornadas no output.
 Possíveis opções são \code{"MINIMAL"} (padrão), que inclui as colunas do
-dataframe de input e outros campos que descrevem o quão boa foi a
+data.frame de input e outros campos que descrevem o quão boa foi a
 correspondência entre a geolocalização e o endereço, \code{"ALL"}, que inclui
 todas as opções disponibilizadas pelo localizador, e \code{"LOCATION_ONLY"}, que
 inclui apenas a geolocalização do endereço e as colunas do input.}
 
 \item{cache}{Um logical (por padrão, \code{TRUE}) ou uma string. Se \code{TRUE}, é
-utilizado um cache "geral" tanto para buscar localizações que já tenham
+utilizado um cache "geral" tanto para buscar engereços que já tenham
 sido geolocalizadas antes quanto para adicionar quaisquer pontos que tenham
 sido geolocalizados na operação corrente. Se \code{FALSE}, nenhum cache é usado.
 Caso seja uma string, seu valor é utilizado para identificar um cache
@@ -67,7 +65,11 @@ especificados.
 \description{
 Geolocaliza um dataframe de endereços com base em diferentes atributos.
 Documentação da ferramenta:
-https://pro.arcgis.com/en/pro-app/latest/tool-reference/geocoding/geocode-addresses.htm.
+\url{https://pro.arcgis.com/en/pro-app/latest/tool-reference/geocoding/geocode-addresses.htm}.
+O output do geocode  traz um conjunto de colunas que indicam o grau de precisão
+do resultado dos endereços que foram geolocalizados O grau de precisão aceitável
+depende do objetivo e escopo de cada pesquisa. A definição exata de cada coluna
+se encontra na documentação  do ArcGIS: \url{https://pro.arcgis.com/en/pro-app/latest/help/data/geocoding/what-is-included-in-the-geocoded-results-.htm}
 }
 \examples{
 reticulate::use_condaenv(
